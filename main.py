@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.layers import LSTM
+from tensorflow.keras.layers import SimpleRNN
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
 import tensorflow as tf
@@ -49,7 +50,8 @@ start = '2018/1/4'
 delay = 50
 
 # quantile
-alpha = (np.arange(9) + 1) / 10
+# alpha = (np.arange(9) + 1) / 10
+alpha = [0.5]
 
 
 # activation function
@@ -69,40 +71,44 @@ data = org(company=company, elements=elements, start=start)
 # normal data
 data.time_variable()
 
-x_train = data.input
-y_train = data.output_nor
+x_train = data.input.astype(np.float32)
+y_train = data.output_nor.astype(np.float32)
 
-x_test = data.input_test
-y_true = data.output_test_nor
+x_test = data.input_test.astype(np.float32)
+y_true = data.output_test_nor.astype(np.float32)
+
 
 y_est_train = np.zeros([len(alpha), len(x_train)])
 y_est_test = np.zeros([len(alpha), len(x_test)])
 
 # Normal NN
+
+# alphaはpinball lossのパラメータ,for文で回すことで最適なパラメータを見つける
 for index, alpha_temp in enumerate(alpha):
     model = Sequential()
     ## ------------------------ 好きにいじってどうぞ ------------------------ ##
-    model.add(Dense(32, input_dim=input_dim, activation=activation))
 
-
-
-    model.add(Dense(output_dim))
+    # ニューロン数32の中間層を作成
+    model.add(Dense(units=32, input_dim=input_dim, activation=activation))
+    # ニューロン数 output_dimの出力層を作成
+    model.add(Dense(units=output_dim))
+    # modelの決定
     model.compile(loss=pinball_loss_alpha(alpha_temp), optimizer=Adam(0.00001))
-
     early_stopping = EarlyStopping(monitor='val_loss', patience=200)
+    # modelの学習　 epoch:その同じ学習データを何回使うのか batch_size:学習データをbatch_sizeの数の束にして学習させる
     model.fit(
                 x_train, y_train,
-                epochs = 1000,
+                # epochs = 1000,
+                epochs = 1,
                 batch_size = 128,
                 validation_split = 0.1,
                 callbacks = [early_stopping]
     )
 
     # NNの構造を出力する
-    # model.summary()
+    model.summary()
 
     ## -------------------------------------------------------------------- ##
-
 
     y_est_train[index] = model.predict(x_train).reshape(-1)
     y_est_test[index] = model.predict(x_test).reshape(-1)
@@ -143,12 +149,15 @@ plt.close()
 # FIX
 elements = ['日付', '始値']
 
+# recurrent Neural Netなので、3次元の情報を取得
 data.time_sequence(delay=delay)
 
-x_train = data.input_seq_nor
-y_train = data.output_seq_nor
+## x_trainの次元を(1052, 1)にする
 
-y_test = data.output_test_nor
+x_train = data.input_seq_nor.astype(np.float32)
+y_train = data.output_seq_nor.astype(np.float32)
+
+y_test = data.output_test_nor.astype(np.float32)
 
 # Recurrent NN
 y_est_train = np.zeros([len(alpha), len(x_train)])
@@ -160,29 +169,30 @@ for index, alpha_temp in enumerate(alpha):
     ## ------------------------ 好きにいじってどうぞ ------------------------ ##
 
     model.add(LSTM(32, batch_input_shape=(None, delay, input_dim), activation='tanh', return_sequences=True))
-
-
-    model.add(Dense(output_dim))
+    model.add(SimpleRNN(128))
+    # Dense層は3次元入力に対しては3次元出力を返す
+    model.add(Dense(units=output_dim))
     model.compile(loss=pinball_loss_alpha(alpha_temp), optimizer=Adam(0.00001))
-
 
     early_stopping = EarlyStopping(monitor='val_loss', patience=20)
     model.fit(
                 x_train, y_train,
-                epochs = 100,
+                # epochs = 100,
+                epochs = 1,
                 batch_size = 64,
                 validation_split = 0.1,
                 callbacks = [early_stopping]
     )
 
     # NNの構造を出力する
-    # model.summary()
+    model.summary()
+    # exit()
 
     ## -------------------------------------------------------------------- ##
-
-
+    
     y_est_train[index] = model.predict(x_train).reshape(-1)
     y_est_test[index] = prd(model=model, input=input, output_length=data.num_days_test)
+
 
 fig = plt.figure(figsize=(12, 8))
 

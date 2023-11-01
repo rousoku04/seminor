@@ -107,6 +107,7 @@ class data_org():
 
         if delay > self.num_days:
             print('Delay is too big...')
+            exit()
 
         input = []
         output = []

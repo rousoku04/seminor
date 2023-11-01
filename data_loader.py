@@ -32,4 +32,4 @@ if __name__== '__main__':
     data = data_load(company='NTT')        
     data.load_from_csv(elements=['日付', '始値', '高値', '安値', '終値'], start='2007/1/4')
     
-    print(data.data)
+    # print(data.df)
